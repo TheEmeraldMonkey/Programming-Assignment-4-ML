@@ -43,80 +43,106 @@ def partition(x):
     """
 
     # INSERT YOUR CODE HERE
+    z = dict()
+    #iterate over all of x
+    for i in range(len(x)):
+        if x[i] in z.keys():     #if key already in dictionary add new index
+            cArray = z[x[i]]
+            cArray.append(i)
+            z.update({x[i] : cArray})
+        else:                       #else create new key with only the current index
+            cArray = [i]
+            z.update({x[i] : cArray})
+        
+
+    return z
     raise Exception('Function not yet implemented!')
 
 
-def entropy(y, weights=None):
-    """
-    Compute the entropy of a vector y by considering the counts of the unique values (v1, ... vk), in z. 
-    Include the weights of the boosted examples if present
 
-    Returns the entropy of z: H(z) = p(z=v1) log2(p(z=v1)) + ... + p(z=vk) log2(p(z=vk))
-    """
-
-    # INSERT YOUR CODE HERE
+def entropy(labels, wts=None):
+    from math import log2
+    if len(labels) == 0:
+        return 0
+    total_weight = np.sum(wts)
+    unique_labels = np.unique(labels)
+    ent = 0
+    for label in unique_labels:
+        p = np.sum(wts[labels == label]) / total_weight
+        if p > 0:
+            ent -= p * log2(p)
+    return ent
     raise Exception('Function not yet implemented!')
 
 
-def mutual_information(x, y, weights=None):
-    """
-    
-    Compute the mutual information between a data column (x) and the labels (y). The data column is a single attribute
-    over all the examples (n x 1). Mutual information is the difference between the entropy BEFORE the split set, and
-    the weighted-average entropy of EACH possible split.
+def mutual_information(split, y, weights=None):
+    """Computes weighted mutual information (information gain)."""
 
-    Returns the mutual information: I(x, y) = H(y) - H(y | x)
+    total_entropy = entropy(y, weights)
 
-    Compute the weighted mutual information for Boosted learners
-    """
+    # Split on True and False branches
+    mask_true = split
+    mask_false = ~split
 
-    # INSERT YOUR CODE HERE
+    w_true = weights[mask_true]
+    w_false = weights[mask_false]
+    y_true = y[mask_true]
+    y_false = y[mask_false]
+
+    p_true = np.sum(w_true) / np.sum(weights)
+    p_false = np.sum(w_false) / np.sum(weights)
+
+    weighted_entropy = p_true * entropy(y_true, w_true) + p_false * entropy(y_false, w_false)
+
+    return total_entropy - weighted_entropy
     raise Exception('Function not yet implemented!')
 
 
 def id3(x, y, attribute_value_pairs=None, depth=0, max_depth=5, weights=None):
-    """
-    Implements the classical ID3 algorithm given training data (x), training labels (y) and an array of
-    attribute-value pairs to consider. This is a recursive algorithm that depends on three termination conditions
-        1. If the entire set of labels (y) is pure (all y = only 0 or only 1), then return that label
-        2. If the set of attribute-value pairs is empty (there is nothing to split on), then return the most common
-           value of y (majority label)
-        3. If the max_depth is reached (pre-pruning bias), then return the most common value of y (majority label)
-    Otherwise the algorithm selects the next best attribute-value pair using INFORMATION GAIN as the splitting criterion
-    and partitions the data set based on the values of that attribute before the next recursive call to ID3.
+    import numpy as np
 
-    The tree we learn is a BINARY tree, which means that every node has only two branches. The splitting criterion has
-    to be chosen from among all possible attribute-value pairs. That is, for a problem with two features/attributes x1
-    (taking values a, b, c) and x2 (taking values d, e), the initial attribute value pair list is a list of all pairs of
-    attributes with their corresponding values:
-    [(x1, a),
-     (x1, b),
-     (x1, c),
-     (x2, d),
-     (x2, e)]
-     If we select (x2, d) as the best attribute-value pair, then the new decision node becomes: [ (x2 == d)? ] and
-     the attribute-value pair (x2, d) is removed from the list of attribute_value_pairs.
+    if attribute_value_pairs is None:
+        attribute_value_pairs = {(j, val) for j in range(x.shape[1]) for val in np.unique(x[:, j])}
 
-    The tree is stored as a nested dictionary, where each entry is of the form
-                    (attribute_index, attribute_value, True/False): subtree
-    * The (attribute_index, attribute_value) determines the splitting criterion of the current node. For example, (4, 2)
-    indicates that we test if (x4 == 2) at the current node.
-    * The subtree itself can be nested dictionary, or a single label (leaf node).
-    * Leaf nodes are (majority) class labels
+    if weights is None:
+        weights = np.ones(len(y)) / len(y)
 
-    Returns a decision tree represented as a nested dictionary, for example
-    {(4, 1, False):
-        {(0, 1, False):
-            {(1, 1, False): 1,
-             (1, 1, True): 0},
-         (0, 1, True):
-            {(1, 1, False): 0,
-             (1, 1, True): 1}},
-     (4, 1, True): 1}
-    """
+    # Base case: all labels are the same
+    if len(set(y)) == 1:
+        return y[0]
 
-    # INSERT YOUR CODE HERE. NOTE: THIS IS A RECURSIVE FUNCTION.
+    # Base case: max depth or no attributes left
+    if not attribute_value_pairs or depth == max_depth:
+        return weighted_majority(y, weights)
+
+    # Best attribute-value pair using weighted mutual information
+    best_pair = max(
+        attribute_value_pairs,
+        key=lambda pair: mutual_information(x[:, pair[0]] == pair[1], y, weights)
+    )
+
+    attribute_value_pairs = attribute_value_pairs - {best_pair}
+    mask_true = x[:, best_pair[0]] == best_pair[1]
+    mask_false = ~mask_true
+
+    # Subsets
+    x_true, y_true, w_true = x[mask_true], y[mask_true], weights[mask_true]
+    x_false, y_false, w_false = x[mask_false], y[mask_false], weights[mask_false]
+
+    tree = {
+        (best_pair[0], best_pair[1], True): id3(x_true, y_true, attribute_value_pairs.copy(), depth + 1, max_depth, w_true),
+        (best_pair[0], best_pair[1], False): id3(x_false, y_false, attribute_value_pairs.copy(), depth + 1, max_depth, w_false)
+    }
+
+    return tree
     raise Exception('Function not yet implemented!')
+def weighted_majority(y, weights):
+    """Returns the weighted majority class in y."""
+    from collections import defaultdict
+    weight_sum = defaultdict(float)
+    for label, w in zip(y, weights):
+        weight_sum[label] += w
+    return max(weight_sum, key=weight_sum.get)
 
 def bootstrap_sampler(x, y, num_samples):
 
@@ -150,16 +176,62 @@ def boosting(x, y, max_depth, num_stumps):
     """
     Implements an adaboost algorithm using the id3 algorithm as a base decision tree
     """
+    '''
+    TASKS:
+        * what do we return (probably something to do with a completed decision tree)
+        * what algorithm are we using
+        * when create bootstrap
+        * what is num_stumps (num_trees, but very short trees)
+        * how to loop through
+        * report confusion matrix in this method, or in main?
+    '''
+    n = len(y)
+    # Step 1: Initialize weights
+    weights = np.ones(n) / n
+    classifiers = []
+    alphas = []
+
+    for t in range(num_stumps):
+        # Step 2: Train a weighted decision stump
+        stump = id3(x, y, max_depth=max_depth, weights=weights)
+
+        # Step 3: Make predictions on training data
+        predictions = np.array([predict_example(x[i], stump) for i in range(n)])
+
+        # Step 4: Calculate weighted error
+        incorrect = predictions != y
+        error = np.sum(weights * incorrect)
+
+        # Avoid divide-by-zero errors
+        if error == 0:
+            alpha = 1
+        else:
+            alpha = 0.5 * np.log((1 - error) / error)
+
+        # Step 5: Update weights
+        weights = weights * np.exp(-alpha * y * (2 * predictions - 1))
+        weights /= np.sum(weights)  # Normalize
+
+        # Store the classifier and its alpha
+        classifiers.append(stump)
+        alphas.append(alpha)
+
+    return classifiers, alphas
+
+    
     raise Exception('Boosting not yet implemented!')
 
-
-def predict_example_ens(x, h_ens):
+def predict_example(x, tree):
     """
     Predicts the classification label for a single example x using a combination of weighted trees
     Returns the predicted label of x according to tree
     """
+    if not isinstance(tree, dict):
+        return tree  # it's a leaf
 
-    # INSERT YOUR CODE HERE. NOTE: THIS IS A RECURSIVE FUNCTION.
+    for (feature, value, decision), subtree in tree.items():
+        if (x[feature] == value) == decision:
+            return predict_example(x, subtree)
     raise Exception('Function not yet implemented!')
 
 
@@ -169,7 +241,16 @@ def compute_error(y_true, y_pred):
 
     Returns the error = (1/n) * sum(y_true != y_pred)
     """
+    #variable to see how many y-values don't match
+    unequal = 0
+    
+    #iterate over all the y values
+    for i in range(len(y_true)):
+        #count up if y-values do not match
+        if (y_true[i] != y_pred[i]):
+            unequal += 1
 
+    return (1/len(y_true) * unequal)
     # INSERT YOUR CODE HERE
     raise Exception('Function not yet implemented!')
 
@@ -198,6 +279,19 @@ def visualize(tree, depth=0):
             print('|\t' * (depth + 1), end='')
             print('+-- [LABEL = {0}]'.format(sub_trees))
 
+def convert_to_builtin(obj):
+    if isinstance(obj, dict):
+        return {convert_to_builtin(k): convert_to_builtin(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple, set)):
+        return type(obj)(convert_to_builtin(item) for item in obj)
+    elif isinstance(obj, np.generic):
+        return obj.item()
+    else:
+        return obj
+def predict_boosted(x, classifiers, alphas):
+    preds = np.array([[predict_example(sample, clf) for clf in classifiers] for sample in x])
+    weighted_preds = np.dot(preds * 2 - 1, alphas)  # Convert labels 0/1 to -1/1
+    return (weighted_preds > 0).astype(int)
 
 if __name__ == '__main__':
     # Load the training data
@@ -211,9 +305,30 @@ if __name__ == '__main__':
     Xtst = M[:, 1:]
 
     #loop through bootstrap function to create sets to train model on
-    k = 50
-    print(f'bootstrap:\n{bootstrap_sampler(Xtrn, ytrn, k)}')
+    # k = 50 
+    # boot = bootstrap_sampler(Xtrn, ytrn, k)
+    # print(f'bootstrap:\n{boot}')
     
+    #boosting models
+    for d in range(1, 3):
+        for k in range(1, 3):
+            boosted = boosting(Xtrn, ytrn, d, k * 20)
+            clean_boosted = convert_to_builtin(boosted)
+            
+            y_pred = predict_boosted(Xtrn, boosted[0], boosted[1])
+            TP = np.sum((y_pred == 1) & (ytrn == 1))
+            TN = np.sum((y_pred == 0) & (ytrn == 0))
+            FP = np.sum((y_pred == 1) & (ytrn == 0))
+            FN = np.sum((y_pred == 0) & (ytrn == 1))
+            
+            print("Confusion Matrix:")
+            print("              Predicted")
+            print("              Pos     Neg")
+            print(f"Actual  Pos     {TP:<5} {FN:<5}")
+            print(f"        Neg     {FP:<5} {TN:<5}")
+            #print(f'{d}: {k * 20}\nBoosting: {clean_boosted}')
+           
+
     '''#figure out boosting
 
     # Learn a decision tree of depth 3
