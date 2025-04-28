@@ -25,11 +25,16 @@
 # visualize, test, or save the data and results. However, you MAY NOT utilize
 # the package scikit-learn OR ANY OTHER machine learning package in THIS file.
 
+#Ameya Sansguiri
 import numpy as np
-import math
+import matplotlib.pyplot as plt
+from sklearn import tree
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import graphviz
 
-
-def partition(x):       #tested
+#Takes col of x-vals as input, returns dictionary with key as vi (unique val) and value as indices of x whose values match each other
+#Top-down induction
+def partition(x):
     """
     Partition the column vector x into subsets indexed by its unique values (v1, ... vk)
 
@@ -40,58 +45,59 @@ def partition(x):       #tested
       vk: indices of x == vk }, where [v1, ... vk] are all the unique values in the vector z.
     """
 
-    z = dict()
-    #iterate over all of x
-    for i in range(len(x)):
-        if x[i] in z.keys():     #if key already in dictionary add new index
-            cArray = z[x[i]]
-            cArray.append(i)
-            z.update({x[i] : cArray})
-        else:                       #else create new key with only the current index
-            cArray = [i]
-            z.update({x[i] : cArray})
-        
-
-    return z
     # INSERT YOUR CODE HERE
+    #Place indices of vals that match with vi into dictionary
+    #v0 = indices of x where x[index] = 0
+    #v1 = indices of x where x[index] = 1
+
+    j = 0   
+    dictVector = {}
+
+    #Get all unique values in x, store as key in dictionary
+    key = np.unique(x)
+    for i in range(len(key)): 
+        dictVector.setdefault(key[i], [])         #Sets default value of each key in dictionary to empty list
+    dictKeys = list(dictVector.keys())          #Stores keys in list
+    
+    #Traverses through the x vals to find which vals match the dictionary key, stores indices as values for the key
+    for i in range(len(x)): #For each x val
+        for j in range(len(dictKeys)):      #For each key in dictionary
+            if x[i] == dictKeys[j]:     #If x val matches the key and the x val's index is not already in the dictionary, add the index to dictionary
+                if i not in dictVector[x[i]]:
+                    dictVector[x[i]].append(i)
+
+    return dictVector
     raise Exception('Function not yet implemented!')
 
-#uncertainty of the value of x (how much suprise there will be)
-def entropy(y):    #finished not tested
+#Uses partition function
+#Determines certainty
+#For each vi, calculate entropy and add to existing entropy count
+def entropy(y):
     """
     Compute the entropy of a vector y by considering the counts of the unique values (v1, ... vk), in z
 
     Returns the entropy of z: H(z) = p(z=v1) log2(p(z=v1)) + ... + p(z=vk) log2(p(z=vk))
     """
-    #create a dictionary of the counts of  0 and 1
-    unique, counts = np.unique(y, return_counts=True)
-    dictionary = dict(zip(unique, counts))
-    
-    #if there is only 1's or only 0's return 0 (there is not entropy/surprise)
-    if len(unique) == 1:
-        return 0
-    
-    #find the individual entropies
-    zeros = dictionary[0]       #find the amount of zeros
-    zeros = zeros/np.size(y)    #calculate the probability of zero
-    zeros = -zeros * math.log2(zeros)    #math for the entropy
-    
-    ones = dictionary[1]
-    ones = ones/np.size(y)
-    ones = -ones * math.log2(ones)
-    
-    #calculate the final entropy
-    answer = zeros + ones
 
-
-    return answer
-    
-    return #p(y=1) long2(p(y=1)) + p(y=0) log2(p(y=0))
     # INSERT YOUR CODE HERE
+    v = partition(y)    #Gets the unique values of y and the indices with the unique values by calling the partition function
+    ent = 0             #Stores entropy
+    key = v.keys()      #Stores the unique values/the keys 
+    for i in key:  #For length of dictionary, calculate each vi's probability and entropy
+                examp = (len(v[i])) / (y.size)      #Calculate p(z = vi) = count(indices of unique values) / total size of v
+                if examp > 0:
+                    ent += (-(examp * np.log2(examp)))       #Calculate entropy and add to existing entropy count => P (z=vi) * log(P(z=vi))
+    return ent
     raise Exception('Function not yet implemented!')
 
+#x is an attribute over all ex. - 1st col of 1st feature, 2nd col of 2nd feature, etc.
+#Y = all labels
+#Calls entropy function before split set
+#Calls entropy function for each possible split, take avg of it
+#H(y | x) = - sum(P(X = x)) sum(P(Y = y | X = x)) log P(Y=y | X =x)
+#For each xi, calculate P(Y| Xi = x)
 
-def mutual_information(x, y):       #done and tested
+def mutual_information(x, y):
     """
     Compute the mutual information between a data column (x) and the labels (y). The data column is a single attribute
     over all the examples (n x 1). Mutual information is the difference between the entropy BEFORE the split set, and
@@ -99,38 +105,51 @@ def mutual_information(x, y):       #done and tested
 
     Returns the mutual information: I(x, y) = H(y) - H(y | x)
     """
-    oldEntropy = entropy(y)     #calculate current level entropy
-    
-    #go through all the possible splits
-    partitions = partition(x)
-    
-    for key in partitions.values():  #loop through all the partitions(keys)
-        zeros = 0
-        ones = 0
-        for val in key:
-            if (y[val] == 0):
-                zeros += 1
-            else:
-                ones += 1
-                
-        total = zeros + ones
-        
-        
-        if zeros != 0 and ones != 0:
-            H = -(zeros/total)*math.log2(zeros/total) -(ones/total)*math.log2(ones/total)
-        elif zeros == 0:
-            H = -(ones/total)*math.log2(ones/total)
-        elif (ones == 0):
-            H = -(zeros/total)*math.log2(zeros/total)
-        oldEntropy -= (total/len(y) * H)
-    
-    return oldEntropy
-    
 
     # INSERT YOUR CODE HERE
+    yEnt = entropy(y)       #Stores H(y)
+    xUniqueVals = partition(x)  #Gets dictionary with unique vals of x
+    xKeys = list(xUniqueVals.keys()) #Gets keys of x-vals --> unique values
+    totalConditEnt = 0      #Stores the conditional entropy H (y|x)
+    probX = 0
+    probXY = 0
+
+    #For each unique x val
+    for i in range(len(xKeys)):
+        probX = len(xUniqueVals[xKeys[i]])/ (x.size)       #P(X = x) = length of list with unique val of x / total x size
+        probXY = 0
+        yGivenX = y[(x == xKeys[i])]   #Get Y val when X = x
+        probXY = entropy(yGivenX)       #Calculates entropy of when Y=y and X=x
+        totalConditEnt += ((probX * probXY))    #Calculates total conditional entropy and adds it to corresponding variable
+            
+    mutualInfo = yEnt - totalConditEnt  #Mutual info calculated
+    return mutualInfo
     raise Exception('Function not yet implemented!')
 
+#Mutual information helper - calculates mutual information of a split within a column
+def mutual_info_col(x, val, y):
+    yEnt = entropy(y)       #Stores H(y)
+    xUniqueVals = partition(x)  #Gets dictionary with unique vals of x
+    yUniqueVals = partition(y)  #Gets dictionary with unique vals of y
+    xKeys = list(xUniqueVals.keys()) #Gets keys of x-vals --> unique values
+    yKeys = list(yUniqueVals.keys())   #Gets keys of y-vals --> unique values
+    probX = len(xUniqueVals[val])/ (x.size)       #P(X = x) = length of list with unique val of x / total x size
+    probNotX = 1 - probX        #P(X != x) = 1 - P(X = x)
+    yGivenX = y[(x == val)]   #Get Y vals when X = x
+    yNotGivenX = y[x != val]    #Get Y vals when X != x
 
+    probXY = entropy(yGivenX)       #Calculates entropy of when Y=y and X=x
+    probNotXY = entropy(yNotGivenX) #Calculates entropy of when Y=y and X!=x
+    totalConditEnt = ((probX * probXY) + (probNotX * probNotXY))   #Calculates total conditional entropy for the split on the specific value
+    mutualInfo = yEnt - totalConditEnt      #Calculates the mutual information of the specific split on the value, returns the mutual information
+    return mutualInfo
+
+#Input to algorithm = training data and max depth of tree to be learned
+#First, should iterate through y, check if y-val = 0 or 1, maintain 2 counts: one for y = 0 and one for y = 1, compare to size of y ==> 1st condition conpleted
+#Condition 2: from above iteration, should compare y = 0 and y = 1 counts, return majority
+#Condition 3: if depth == max_depth -> same as condition 2
+#Otherwise, calculates information gain - pick x with highest mutual information -> call mutual_information function
+#Call id3 recursively
 def id3(x, y, attribute_value_pairs=None, depth=0, max_depth=5):
     """
     Implements the classical ID3 algorithm given training data (x), training labels (y) and an array of
@@ -173,45 +192,121 @@ def id3(x, y, attribute_value_pairs=None, depth=0, max_depth=5):
     """
 
     # INSERT YOUR CODE HERE. NOTE: THIS IS A RECURSIVE FUNCTION.
-    #create a list of all the attribute-value pairs
-    if attribute_value_pairs is None:
-        attribute_value_pairs = {(j, val) for j in range(x.shape[1]) for val in np.unique(x[:, j])}
         
-    #base cases
-    #if all the items of y are uniform
-    if len(set(y)) == 1:  # Pure labels
-        return y[0]
+   #If first time coming in to ID3, initialize attribute_value_pairs
+    if attribute_value_pairs == None:
+        #Traverse through set, add attribute col num and val pairs that have not already been added
+        #For each col, place the val into the set with the col num 
+        
+        attribute_value_pairs = list() 
+        numCols = x.shape[1]
 
-    #if there are no more attribute value pairs or if the max depth has been reached
-    if not attribute_value_pairs or depth == max_depth:  # Stopping condition
-        return max(set(y), key=list(y).count)
+        #For each col, place the val into the attribute_value_pairs list with the col num 
+        for i in range(numCols):
+            xCol = x[: , i]     #Takes the current column
+            for j in range(xCol.size):      #For each value in the column
+                 val = xCol[j]
+                 attValPair = (i, val)      #Store the col num and val as a tuple
+                 if attValPair not in attribute_value_pairs:        #If not already added, add the pair 
+                    attribute_value_pairs.append(attValPair)
+
+#Condition checking
+    zeroY = 0       #Stores num of y vals with 0
+    oneY = 0        #Stores num of y vals with 1
+    total = 0       #Total y vals
+
+    #Condition 1: Counts the y vals with 0 and y vals with 1 by looping thorugh the y vals
+    #If either the zeroY count or oneY count equal the total num of vals --> pure --> return the corresponding label
+    for i in range(len(y)):
+        if y[i] == 0:
+            zeroY += 1
+        elif y[i] == 1:
+            oneY += 1
+    total = zeroY + oneY
+    if zeroY == total:
+            return 0
+    elif oneY == total:
+            return 1
     
-    #find the best pair by finding the attribute-value pair with the highest information gain
-    #max finds the biggest value of the parameters given
-    #attribute_value_pairs is the list which we are iterating over
-    #key=lambda pair makes pair the current pair that we are checking the information gained from
-    #mutual_information is the method that we use for information gain
-    #x[:, pair[0]] == pair[1] chooses only the values that are included in the chosen partition
-    best_pair = max(attribute_value_pairs, key=lambda pair: mutual_information(x[:, pair[0]] == pair[1], y))
-    
-    #remove the chose best pair from the list of attibute_value_pairs that can be chose as partitions
-    attribute_value_pairs = attribute_value_pairs - {best_pair}
-    
-    #prepare the x's and y's that are going to continue the tree
-    x_true = x[x[:, best_pair[0]] == best_pair[1]]
-    y_true = y[x[:, best_pair[0]] == best_pair[1]]
-    x_false = x[x[:, best_pair[0]] != best_pair[1]]
-    y_false = y[x[:, best_pair[0]] != best_pair[1]]
-    
-    #recursive call for what is included in true partition and false partition
-    tree = {
-        (best_pair[0], best_pair[1], True): id3(x_true, y_true, attribute_value_pairs.copy(), depth + 1, max_depth),
-        (best_pair[0], best_pair[1], False): id3(x_false, y_false, attribute_value_pairs.copy(), depth + 1, max_depth)
-    }
+    #Condition 2 and 3 - if attribute_value_pairs has no elements or the max depth has been reached, return the most common label
+    if (len(attribute_value_pairs) == 0) or (depth == max_depth):
+        if zeroY > oneY:
+            return 0
+        else:
+            return 1
+        
+    #If there are no examples, return the most common label
+    if len(x) == 0:
+        if zeroY > oneY:
+            return 0
+        else:
+            return 1
+
+    #Chooses best attribute-value pair by looping through each column, calculating information gain - pick x col with highest mutual information -> call mutual information function
+    #Then loop through each attribute-value pair and check what specific value of the best chosen x col will give the highest mutual information --> call mutual information helper function
+    #Mutual info takes x and y as params - x = col  
+    mutInfo = 0     #Stores mutual info
+    xColumn = 0      #Stores the xCol with the highest mutual info
+    bestPair = attribute_value_pairs[0]       #Takes val of ith col from pairs list
+    if isinstance(x, (list)):       #If x is a list, make it an np array
+                x = np.array(x)
+    cols = x.shape[1]   #Gets the number of columns in x
+    for i in range(cols):       #For each x column
+           
+            xCol = x[:, i]    #Get the current col of x
+            
+            temp = mutual_information(xCol, y)  #Sends x col and corresponding y vals to mutual info
+
+            #If the mutual info calculated is greater than the one already stored, replace it so mutInfo has the highest mutual info
+            if temp > mutInfo:
+                mutInfo = temp
+                xColumn = i       #Best column is now the current col
+            
+    mutInfo = 0     #Reset mutInfo to use now
+    #Found the col with the best mutual information, now want to find the col-val pair in attribute-val pairs that gives best mutual information
+    for i in range(len(attribute_value_pairs)):
+        column, value = attribute_value_pairs[i]
+        if column == xColumn:       #If the column of the current attribute-value pair matches the best x column found,
+            xCol = x[:, column]     #Get the x values of the column
+            if np.isin(value, xCol):    #If the value of the current attribute-value pair is in the column, send the column, value, and y labels to the mutual info helper function
+                temp = mutual_info_col(xCol, value, y)      #Calculates the mutual information between the specific value of the attribute and y
+                if temp > mutInfo:      #If the mutual information found is greater than the one already stored, replace it so mutInfo has the highest mutual info
+                    mutInfo = temp
+                    bestPair = attribute_value_pairs[i]     #Assign the bestPair with the current attribute-value pair
+
+    #Creates an empty tree
+    tree = {}
+
+    #Check through each example, check if Xi of best pair = specified value (EX: check if X2 = 1, X2 = 2, etc.)
+    #Loop through each possible Xi val
+    bestAttribute, bestValue = bestPair     #Get the best attribute and best value from the best pair calculated
+    bestPairTrue = (bestAttribute, bestValue, True)     #Format to be stored as in tree
+    bestPairFalse = (bestAttribute, bestValue, False)   #Format to be stored as in tree
+    yTrueVals = []              #Stores the corresponding y vals of the examples that are true
+    yFalseVals = []             #Stores the corresponding y vals of the examples that are false
+    trueExamples = []           #Stores the examples that are true
+    falseExamples = []          #Stores the examples that are false
+    attribute_value_pairs.remove(bestPair)  #Removes the best attribute value pair from attribute_value_pairs before splitting
+
+   #For each value in x
+   #If they are equal, add the example and the corresponding y val to trueExamples and yTrueVals 
+    for i in range(len(x)):      
+         if x[i][(bestAttribute)] == bestValue:      #Check if the x val in the column = the best value from the best pair
+            trueExamples.append(x[i])        #If they are equal (meaning Xi = true), add the example to trueExamples
+            yTrueVals.append(y[i])          #Add the corresponding y val to yTrueVals
+         else:
+             falseExamples.append(x[i])     #Else, Xi = false, so add the example to falseExamples
+             yFalseVals.append(y[i])        #Add the corresponding y val to yFalseVals
+
+    yTrueVals = np.array(yTrueVals)     #Make yTrueVals an np array
+    yFalseVals = np.array(yFalseVals)   #Make yFalseVals an np array
+
+    #Call ID3 recursively for the true and the false examples, making the children/other nodes of the tree
+    tree[bestPairTrue]= id3(trueExamples, yTrueVals, attribute_value_pairs, depth + 1, max_depth)
+    tree[bestPairFalse]= id3(falseExamples, yFalseVals, attribute_value_pairs, depth + 1, max_depth)
 
     return tree
-    
-    
+
     raise Exception('Function not yet implemented!')
 
 
@@ -222,40 +317,52 @@ def predict_example(x, tree):
 
     Returns the predicted label of x according to tree
     """
-    #base case
-    if(type(tree) is np.int64):
-        return tree
-    
-    #find the current branch posibility
-    key = list(tree.keys())[0]
-    
-    #find which branch to go down
-    if x[key[0]] == key[1]:  # True branch
-        return predict_example(x, tree[key])
-    else:  # False branch
-        return predict_example(x, tree[(key[0], key[1], False)])    
 
     # INSERT YOUR CODE HERE. NOTE: THIS IS A RECURSIVE FUNCTION.
-    raise Exception('Function not yet implemented!')
+    
+    #If the tree is not a dictionary, but is a tuple, get the label and return the label if it is 1 or 0
+    #If the tree is not a tuple, that means the tree is an integer, return the tree
+    if type(tree) is not dict:
+        if type(tree) is tuple:
+            pair, label = tree
+            if label == 1 or label == 0:
+                return label
+        else:
+            return tree
+    
+    treeIterator = iter(tree.items())       #Iterator to get the left and right subtrees
+    leftvalPair, leftsubtree =  next(treeIterator)      #Gets the left subtree and stores the pair and remaining subtree in corresponding variables
+    rightvalPair, rightsubtree = next(treeIterator)     #Gets the right subtree and stores the pair and remaining subtree in corresponding variables
+    leftindex, leftval, labelPred = leftvalPair         #Gets the index, val, and label of the left pair
+    rightindex, rightval, labelPred = rightvalPair      #Gets the index, val, and label of the right pair
+
+    
+    if x[leftindex] == leftval:                   #If the val of the best attribute in the example equals the best val in the left subtree, traverse down the left subtree
+        return predict_example(x, leftsubtree)
+    elif x[rightindex] == rightval:                #If the val of the best attribute in the example equals the best val in the right subtree, traverse down the right subtree
+        return predict_example(x, rightsubtree)            
+    elif False in rightvalPair:                         #If the pair has false, traverse down the right subtree (to the right = false)
+        return predict_example(x, rightsubtree)
+    else:
+         return predict_example(x, leftsubtree)        #Else, traverse down the left subtree
+
+    #raise Exception('Function not yet implemented!')
 
 
 def compute_error(y_true, y_pred):
     """
-    Computes the average error between the true labels (y_trues) and the predicted labels (y_pred)
+    Computes the average error between the true labels (y_true) and the predicted labels (y_pred)
 
     Returns the error = (1/n) * sum(y_true != y_pred)
     """
-    #variable to see how many y-values don't match
-    unequal = 0
-    
-    #iterate over all the y values
-    for i in range(len(y_true)):
-        #count up if y-values do not match
-        if (y_true[i] != y_pred[i]):
-            unequal += 1
 
-    return (1/len(y_true) * unequal)
     # INSERT YOUR CODE HERE
+    matchSum = 0        #Counter for the vals that do not match
+    for i in range(len(y_true)):        #Traverses through both true and predicted y val arrays, if the vals don't match, add 1 to counter
+        if (y_true[i] != y_pred[i]):
+            matchSum += 1
+    error = (1/len(y_true)) * matchSum      #Error = 1/size of true y val array * the num of vals that don't match
+    return error
     raise Exception('Function not yet implemented!')
 
 
@@ -283,26 +390,135 @@ def visualize(tree, depth=0):
             print('|\t' * (depth + 1), end='')
             print('+-- [LABEL = {0}]'.format(sub_trees))
 
+#Calculates the confusion matrix, takes the predicted and actual y values as arguments
+def confMatrix(yPred, yActual):
+    #Counters for true positive, false negative, false positive, and true negative
+    truePositive = 0        
+    falseNegative = 0
+    falsePositive = 0
+    trueNegative = 0
+
+    #Loops through actual y vals
+    for i in range(len(yActual)):
+        if yPred[i] == yActual[i] == 1:     #If both actual and predicted y values are 1, add 1 to true positive count
+            truePositive += 1
+        elif yPred[i] == yActual[i] == 0:   #If both actual and predicted y values are 0, add 1 to true negative count
+            trueNegative += 1
+        else:
+            if yPred[i] == 1 and yActual[i] == 0:   #If actual y value is 0 and predicted y val is 1, add 1 to false positive count
+                falsePositive += 1
+            else:
+                falseNegative += 1                  #Else, add 1 to false negative count
+    
+    #Builds table to display on screen
+    print("                              Predicted Value")
+    print("                     Positive                    Negative")
+    print("                 --------------------------------------------")
+    print("                 |  True Positive      |  False Negative     |")
+    print("  Positive       | " +  str(truePositive) + "                 |   " + str(falseNegative) + "               |")
+    print("                 |                     |                     |")
+    print("Actual           |---------------------| --------------------|")
+    print("Value            |  False Positive     |  True Negative      |")
+    print("                 | " +  str(falsePositive) +   "                   |   " + str(trueNegative) + "               |")
+    print("   Negative      |                     |                     |")
+    print("                 |                     |                     |")
+    print("                 --------------------------------------------")
+
+        
+
+def convert(value):
+   # try:
+        # Try to convert to float
+        if(isinstance(value, int)):
+            return int(value)
+        else:
+        # If it fails, encode as hex
+            return value.encode('utf-8').hex()
+def decode_hex(value):
+   # try:
+        if(isinstance(value, int)):
+            return int(value)
+   # except ValueError:
+        # Try to decode assuming it's hex
+        else:
+            return bytes.fromhex(value).decode('utf-8')
+   # except ValueError:
+        # If it fails (it's just a number), leave it as-is
+    #    return value
 
 if __name__ == '__main__':
     # Load the training data
-    M = np.genfromtxt('./monks-1.train', missing_values=0, skip_header=0, delimiter=',', dtype=int)
-    #M = np.genfromtxt('./chatgpt.train', missing_values=0, skip_header=0, delimiter=',', dtype=int)
-    ytrn = M[:, 0]
-    Xtrn = M[:, 1:]
+    filename = f'./wcmatches.csv'
+    #M = np.genfromtxt('./wcmatches.csv', missing_values=0, skip_header=0, delimiter=',', dtype=int)
+    M = np.genfromtxt('./wcmatches.csv', skip_header=0, delimiter=',', dtype=str)
 
-    # Load the test data
-    M = np.genfromtxt('./monks-1.test', missing_values=0, skip_header=0, delimiter=',', dtype=int)
-    #M = np.genfromtxt('./chatgpt.test', missing_values=0, skip_header=0, delimiter=',', dtype=int)
-    ytst = M[:, 0]
-    Xtst = M[:, 1:]
 
-    # Learn a decision tree of depth 3
-    decision_tree = id3(Xtrn, ytrn, max_depth=3)
-    visualize(decision_tree)
+    # Step 3: Apply it across the entire array
+    vectorized_convert = np.vectorize(convert)  # Applies function to every element
+    converted_data = vectorized_convert(M)
 
-    # Compute the test error
-    y_pred = [predict_example(x, decision_tree) for x in Xtst]      #currently predicting all 1's
-    tst_err = compute_error(ytst, y_pred)
+    # Step 2: Vectorize it to apply over the array
+    vectorized_decode = np.vectorize(decode_hex, otypes=[str])
+    decoded_data = vectorized_decode(converted_data)
+    print(decoded_data)
+    
+    #create filter
+    country_list = ['Brazil', 'Germany', 'Italy', 'Argentina', 'France', 'Spain', 'England', 'Uruguay']
+    hex_vals = vectorized_convert(country_list)
+    print(f'hex vals: {hex_vals}')
+    #target_value = 'Uruguay'.encode('utf-8').hex()
+    #print(f'target value: {target_value}')
 
-    print('Test Error = {0:4.2f}%.'.format(tst_err * 100))
+    # Find which rows match
+    mask = np.isin(converted_data[:, 4], hex_vals)
+
+    # Apply the mask to get the filtered rows
+    filteredHomeTeam_rows = converted_data[mask]
+
+    mask = np.isin(filteredHomeTeam_rows[:, 5], hex_vals)
+
+    # Apply the mask to get the filtered rows
+    filteredTeam_rows = filteredHomeTeam_rows[mask]
+    
+    #Years of 1998 to 2018
+    year_list = ['1998', '2002', '2006', '2010', '2014','2018']
+    hex_vals = vectorized_convert(year_list)
+    print(f'hex vals: {hex_vals}')
+    mask = np.isin(filteredTeam_rows[:, 0], hex_vals)
+
+    #Extracts the matches between the years of 1998 to 2018
+    filteredTeamYear_rows = filteredTeam_rows[mask]
+    decoded_data = vectorized_decode(filteredTeamYear_rows)
+
+    print(decoded_data)
+
+    #Had to remove , from Hong Kong, China - code was thinking Hong Kong and China were separate columns, causing error
+    M = np.genfromtxt('./fifa_mens_rank.csv', skip_header=0, delimiter=',', dtype=str)
+
+    mask = np.isin(M[:, 3], country_list)
+    filtered_RankTeam = M[mask]
+    mask = np.isin(filtered_RankTeam[:, 0], year_list)
+    filtered_RankYearTeam = filtered_RankTeam[mask]
+    print(filtered_RankYearTeam)
+    for country in country_list:
+         mask = np.isin(filtered_RankYearTeam[:, 3], country)
+         rankTemp = filtered_RankYearTeam[mask]
+         mask = np.isin(filtered_RankYearTeam[:, 3], country)
+         rankTemp = filtered_RankYearTeam[mask]
+         for year in year_list:
+             mask = np.isin(rankTemp[:, 0], year)
+             rank = rankTemp[mask]
+             rankSemester = rank[:, 2]
+             avgRank = int((int(rankSemester[0]) + int(rankSemester[1])) / 2)
+            # for row in decoded_data:
+               #   indices = np.where(country)[3] and np.where(year)[0]
+            # for i in range(decoded_data.shape[0]):
+            #      for j in range(decoded_data.shape[1]):
+            #        if decoded_data[i][4] == country or decoded_data[i][5] == country and decoded_data[i][0] == year:
+                            
+    #M = np.genfromtxt('./FIFA - 2014.csv', missing_values=0, skip_header=0, delimiter=',', dtype=int)
+    ytrn = decoded_data[:, 10]
+    Xtrn = decoded_data[:, 4:]
+    
+    print(f'ytest: {ytrn}')
+    print(f'Xtst: {Xtrn}')
