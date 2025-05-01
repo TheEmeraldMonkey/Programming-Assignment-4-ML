@@ -33,9 +33,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import graphviz
 
-
-#Import Sklearn Libraries for comparison
-
+#Ameya Sansguiri and Juan Arce
 
 def partition(x):
     """
@@ -372,19 +370,17 @@ def bagging(x, y, max_depth, num_trees):
     y_pred = [0] * len(y)
     tempPred = []
     for i in range(num_trees):
-    # Learn a decision tree with bootstrap set with depth d
+    # Learn a decision tree with bootstrap set with depth max_depth
         decision_tree = id3(x, y, max_depth=max_depth)
-        #Predict y train set
+        #Predict y set
         for j in range(len(x)):
             y_pred[j] = predict_example(x[j], decision_tree)
-        pred.append(y_pred)
+        pred.append(y_pred)     #Add set of predicitons to list
     for k in range(len(x)):
         tempPred = []
         for p in pred:
-            tempPred.append(p[k])
-        #tempPred = [p[k] for p in pred]
-        majority.append(findMajority(tempPred))
-        #Use a majority vote of the train set predictions
+            tempPred.append(p[k])       #Add y predictions of the kth column
+        majority.append(findMajority(tempPred)) #Find a majority vote of the y predictions
     return majority
     raise Exception('Bagging not yet implemented!')
 
@@ -398,6 +394,7 @@ def boosting(x, y, max_depth, num_stumps):
     weights = np.ones(n) / n
     classifiers = []
     alphas = []
+    ensemble = []
 
     for t in range(num_stumps):
         # Step 2: Train a weighted decision stump
@@ -421,10 +418,12 @@ def boosting(x, y, max_depth, num_stumps):
         weights /= np.sum(weights)  # Normalize
 
         # Store the classifier and its alpha
+        pair = (alpha, stump)
+        ensemble.append(pair)
         classifiers.append(stump)
         alphas.append(alpha)
 
-    return classifiers, alphas
+    return ensemble
 
     
     raise Exception('Boosting not yet implemented!')
@@ -467,7 +466,6 @@ def predict_example(x, tree):
 
     #raise Exception('Function not yet implemented!')
 
-#def predict_boosted(x, classifiers, alphas):
 #h_ens = ensemble of weighted hypotheses
 #h_ens = array of pairs (hypothesis, weight)
 def predict_example_ens(x, h_ens):
@@ -475,7 +473,8 @@ def predict_example_ens(x, h_ens):
     Predicts the classification label for a single example x using a combination of weighted trees
     Returns the predicted label of x according to tree
     """
-
+    alphas = [i[0] for i in h_ens]
+    classifiers = [i[1] for i in h_ens]
     preds = np.array([[predict_example(sample, clf) for clf in classifiers] for sample in x])
     weighted_preds = np.dot(preds * 2 - 1, alphas)  # Convert labels 0/1 to -1/1
     return (weighted_preds > 0).astype(int)
@@ -598,129 +597,120 @@ if __name__ == '__main__':
 
     setNum = 1
     for set in [monks1set, monks2set, monks3set]:
-        #Bootstrap called multiple times for each bag size k
-        #Bagging - d = 3, 5 , bag size k = 10,20
         if setNum == 1:
             print("====================================================================================================")
             print("MONKS-1")
-            #print("====================================================================================================")
         elif setNum == 2:
             print("====================================================================================================")
             print("MONKS-2")
-            #print("====================================================================================================")
         else:
             print("====================================================================================================")
             print("MONKS-3")
-            #print("====================================================================================================")
 
         Xtrn, ytrn, Xtst, ytst = set
         print("BAGGING:")
-       #print("--------------------------------------------------------------------------------------------------------")
         depth = [3,5]
         bagSize = [10, 20]
+        #Loops through each combination of depth of 3, 5 and bag size of 10, 20 for bagging
         for i in depth:
             for j in bagSize:
                 print("-------------------------------------------------------------------------------------------------")
                 print("Depth: " + str(i) +"    Bag Size: " + str(j))
+
+                #Training bootstrap set
                 print("\nTraining Set:")
                 bootStrapTrn = bootstrap_sampler(Xtrn, ytrn, j)
                 xtrnBootStrap, ytrnBootStrap = bootStrapTrn
                 y_predTrn = bagging(xtrnBootStrap, ytrnBootStrap, i, j)
                 errTrn = compute_error(ytrnBootStrap, y_predTrn)
                 print('Train Error = {0:4.2f}%.'.format(errTrn * 100))
-                cMatrix = confMatrix(y_predTrn, ytrnBootStrap)
+                cMatrix = confMatrix(y_predTrn, ytrnBootStrap)      #Confusion matrix for training bootstrap set
 
+                #Test bootstrap set
                 print("\nTest Set:")
                 bootStrapTst = bootstrap_sampler(Xtst, ytst, j)
                 xtstBootStrap, ytstBootStrap = bootStrapTst
                 y_predTst = bagging(xtstBootStrap, ytstBootStrap, i, j)
                 errTst = compute_error(ytstBootStrap, y_predTst)
                 print('Test Error = {0:4.2f}%.'.format(errTst * 100))
-                cMatrix = confMatrix(y_predTst, ytstBootStrap)
+                cMatrix = confMatrix(y_predTst, ytstBootStrap)      #Confusion matrix for testing bootstrap set
 
-        #y_predTrn = bagging(Xtrn, ytrn, 3, len(ytrn))
-        #  errTrn = compute_error(ytrn, y_predTrn)
-
-        # y_predTst = bagging(Xtst, ytst, 3, len(ytst))
-        # errTst = compute_error(ytst, y_predTst)
+                #Scikit-Learn training bootstrap set
                 print("\n\nScikit-Learn:")
                 clf = BaggingClassifier()
                 clf = clf.fit(Xtrn, ytrn)
-        # size = ytrn.size
                 yPredSK = clf.predict(xtrnBootStrap)
                 errTrnSK = compute_error(ytrnBootStrap, yPredSK)
-         # print('Test Error = {0:4.2f}%.'.format(errTrnS * 100))
                 print('\nTrain Scikit-Learn Error = {0:4.2f}%.'.format(errTrnSK * 100))
-                cMatrix = confMatrix(yPredSK, ytrnBootStrap)
-                #confusionMatrix = confusion_matrix(ytrnBootStrap, yPredSK)
-                #matrix = ConfusionMatrixDisplay(confusion_matrix=confusionMatrix, display_labels=['0', '1'])
-                #matrix.plot()
-                #plt.show()
+                confusionMatrix = confusion_matrix(ytrnBootStrap, yPredSK)
+                matrix = ConfusionMatrixDisplay(confusion_matrix=confusionMatrix, display_labels=['0', '1'])
+                matrix.plot()
+                matrix.ax_.set_title("Bagging - Depth " + str(i) + " and Bag Size " + str(j) + " - SciKit-Learn Train Bootstrap Confusion Matrix")
+                plt.show()
 
+                #Scikit-Learn test bootstrap set
                 clf = BaggingClassifier()
                 clf = clf.fit(Xtst, ytst)
-        # size = ytrn.size
                 yPredSK = clf.predict(xtstBootStrap)
                 errTstSK = compute_error(ytstBootStrap, yPredSK)
-         # print('Test Error = {0:4.2f}%.'.format(errTrnS * 100))
                 print('\nTest Scikit-Learn Error = {0:4.2f}%.'.format(errTstSK * 100))
-                cMatrix = confMatrix(yPredSK, ytstBootStrap)
+                confusionMatrix = confusion_matrix(ytstBootStrap, yPredSK)
+                matrix = ConfusionMatrixDisplay(confusion_matrix=confusionMatrix, display_labels=['0', '1'])
+                matrix.plot()
+                matrix.ax_.set_title("Bagging - Depth " + str(i) + " and Bag Size " + str(j) + " - SciKit-Learn Test Bootstrap Set Confusion Matrix")
+                plt.show()
     
         print("-----------------------------------------------------------------------------------------------")
         print("BOOSTING")
-        #print("-----------------------------------------------------------------------------------------------")
         for d in range(1, 3):
             for k in range(1, 3):
+                #Loops for each combination of depth of 1, 2 and bag size of 20, 40
                 print("-------------------------------------------------------------------------------------------------")
                 print("Depth: " + str(d) +"    Bag Size: " + str(k*20))
+
+                #Training bootstrap set
                 print("\nTraining Set: ")
                 bootStrapTrn = bootstrap_sampler(Xtrn, ytrn, k*20)
                 xtrnBootStrap, ytrnBootStrap = bootStrapTrn
                 boosted = boosting(xtrnBootStrap, ytrnBootStrap, d, k * 20)
-                #clean_boosted = convert_to_builtin(boosted)
-
-                y_predTrn = predict_example_ens(xtrnBootStrap, boosted[0], boosted[1])
+                y_predTrn = predict_example_ens(xtrnBootStrap, boosted)
                 errorTrn = compute_error(ytrnBootStrap, y_predTrn)
                 print('Train Error = {0:4.2f}%.'.format(errorTrn * 100))
                 cMatrix = confMatrix(y_predTrn, ytrnBootStrap)
                 
+                #Test bootstrap set
                 print("\nTest Set:")
                 bootStrapTst = bootstrap_sampler(Xtst, ytst, k*20)
                 xtstBootStrap, ytstBootStrap = bootStrapTst
                 boosted = boosting(xtstBootStrap, ytstBootStrap, d, k * 20)
-                y_predTst = predict_example_ens(xtstBootStrap, boosted[0], boosted[1])
+                y_predTst = predict_example_ens(xtstBootStrap, boosted)
                 errorTst = compute_error(ytstBootStrap, y_predTst)
                 print('Test Error = {0:4.2f}%.'.format(errorTst * 100))
                 cMatrix = confMatrix(y_predTst, ytstBootStrap)
 
+                #Adaboost training bootstrap set
                 print("\n\nAdaboost:")
                 clf = AdaBoostClassifier()
                 clf = clf.fit(Xtrn, ytrn)
                 yPredAda = clf.predict(xtrnBootStrap)
                 errorTrn = compute_error(ytrnBootStrap, yPredAda)
                 print('\nTrain Adaboost Error = {0:4.2f}%.'.format(errorTrn * 100))
-                cMatrix = confMatrix(yPredAda, ytrnBootStrap)
+                confusionMatrix = confusion_matrix(ytrnBootStrap, yPredAda)
+                matrix = ConfusionMatrixDisplay(confusion_matrix=confusionMatrix, display_labels=['0', '1'])
+                matrix.plot()
+                matrix.ax_.set_title("Adaboost - Depth " + str(d) + " and Bag Size " + str(k*20) + " - Train Bootstrap Set Confusion Matrix")
+                plt.show()
 
+                #Adaboost test bootstrap set
                 clf = AdaBoostClassifier()
                 clf = clf.fit(Xtst, ytst)
                 yPredAda = clf.predict(xtstBootStrap)
                 errorTst = compute_error(ytstBootStrap, yPredAda)
-                #cMatrix = confMatrix(y_predTrn, )
-                #print('\nTest Error = {0:4.2f}%.'.format(errorTst * 100))
                 print('\nTest Adaboost Error = {0:4.2f}%.'.format(errorTst * 100))
-                cMatrix = confMatrix(yPredAda, ytstBootStrap)
+                confusionMatrix = confusion_matrix(ytstBootStrap, yPredAda)
+                matrix = ConfusionMatrixDisplay(confusion_matrix=confusionMatrix, display_labels=['0', '1'])
+                matrix.plot()
+                matrix.ax_.set_title("Adaboost - Depth " + str(d) + " and Bag Size " + str(k*20) + " - Test Bootstrap Set Confusion Matrix")
+                plt.show()
 
         setNum += 1
-            #TP = np.sum((y_predTrn == 1) & (ytrn == 1))
-           # TN = np.sum((y_predTrn == 0) & (ytrn == 0))
-           # FP = np.sum((y_predTrn == 1) & (ytrn == 0))
-           # FN = np.sum((y_predTrn == 0) & (ytrn == 1))
-    # Learn a decision tree with bootstrap set with depth d
-   # decision_tree = id3(xtrnBootStrap, ytrnBootStrap, max_depth=3)
-    #visualize(decision_tree)
-
-    # Compute the test error
-   # y_pred = [predict_example(x, decision_tree) for x in Xtst]
-   # tst_err = compute_error(ytst, y_pred)
-
-   # print('Test Error = {0:4.2f}%.'.format(tst_err * 100))
