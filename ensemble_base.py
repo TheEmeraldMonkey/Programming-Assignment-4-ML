@@ -369,19 +369,12 @@ def bagging(x, y, max_depth, num_trees):
     majority = []
     y_pred = [0] * len(y)
     tempPred = []
+    decTreeList = []
     for i in range(num_trees):
     # Learn a decision tree with bootstrap set with depth max_depth
         decision_tree = id3(x, y, max_depth=max_depth)
-        #Predict y set
-        for j in range(len(x)):
-            y_pred[j] = predict_example(x[j], decision_tree)
-        pred.append(y_pred)     #Add set of predicitons to list
-    for k in range(len(x)):
-        tempPred = []
-        for p in pred:
-            tempPred.append(p[k])       #Add y predictions of the kth column
-        majority.append(findMajority(tempPred)) #Find a majority vote of the y predictions
-    return majority
+        decTreeList.append(decision_tree)   #Appends each decision tree to a list for test predictions later
+    return decTreeList
     raise Exception('Bagging not yet implemented!')
 
 def boosting(x, y, max_depth, num_stumps):
@@ -621,44 +614,75 @@ if __name__ == '__main__':
                 print("\nTraining Set:")
                 bootStrapTrn = bootstrap_sampler(Xtrn, ytrn, j)
                 xtrnBootStrap, ytrnBootStrap = bootStrapTrn
-                y_predTrn = bagging(xtrnBootStrap, ytrnBootStrap, i, j)
-                errTrn = compute_error(ytrnBootStrap, y_predTrn)
+                decisionTreeList = bagging(xtrnBootStrap, ytrnBootStrap, i, j)
+                yTrnPredList = [0] * j
+                index = 0
+                 #Predict y set
+                for tree in decisionTreeList:
+                     yTrnPredList[index] = [predict_example(x, tree) for x in Xtrn]
+                     index += 1
+                yPred = []
+                for idx in range(len(ytrn)):
+                    predList = []
+                    for col in yTrnPredList:
+                        #predList = []
+                        predList.append(col[idx])
+                    yPred.append(findMajority(predList))
+               # pred.append(y_pred)     #Add set of predicitons to list
+          #  for k in range(len(x)):
+             #   tempPred = []
+              #  for p in pred:
+              #      tempPred.append(p[k])       #Add y predictions of the kth column
+              #  majority.append(findMajority(tempPred)) #Find a majority vote of the y predictions
+                errTrn = compute_error(ytrnBootStrap, yPred)
                 print('Train Error = {0:4.2f}%.'.format(errTrn * 100))
-                cMatrix = confMatrix(y_predTrn, ytrnBootStrap)      #Confusion matrix for training bootstrap set
+                cMatrix = confMatrix(yPred, ytrn)      #Confusion matrix for training bootstrap set
 
                 #Test bootstrap set
                 print("\nTest Set:")
-                bootStrapTst = bootstrap_sampler(Xtst, ytst, j)
-                xtstBootStrap, ytstBootStrap = bootStrapTst
-                y_predTst = bagging(xtstBootStrap, ytstBootStrap, i, j)
-                errTst = compute_error(ytstBootStrap, y_predTst)
+                #bootStrapTst = bootstrap_sampler(Xtst, ytst, j)
+                #xtstBootStrap, ytstBootStrap = bootStrapTst
+                #y_predTst = bagging(xtstBootStrap, ytstBootStrap, i, j)
+                yTstPredList = []
+                idx = 0
+                for tree in decisionTreeList:
+                  yTstPredList.append([predict_example(x, tree) for x in Xtst])
+                  #idx += 0
+                yPredTst = []
+                for idx in range(len(ytst)):
+                    predTstList = []
+                    for col in yTstPredList:
+                        #predList = []
+                        predTstList.append(col[idx])
+                    yPredTst.append(findMajority(predTstList))
+                errTst = compute_error(ytst, yPredTst)
                 print('Test Error = {0:4.2f}%.'.format(errTst * 100))
-                cMatrix = confMatrix(y_predTst, ytstBootStrap)      #Confusion matrix for testing bootstrap set
+                cMatrix = confMatrix(yPredTst, ytst)      #Confusion matrix for testing bootstrap set
 
                 #Scikit-Learn training bootstrap set
                 print("\n\nScikit-Learn:")
                 clf = BaggingClassifier()
                 clf = clf.fit(Xtrn, ytrn)
-                yPredSK = clf.predict(xtrnBootStrap)
-                errTrnSK = compute_error(ytrnBootStrap, yPredSK)
-                print('\nTrain Scikit-Learn Error = {0:4.2f}%.'.format(errTrnSK * 100))
-                confusionMatrix = confusion_matrix(ytrnBootStrap, yPredSK)
+                yPredSK = clf.predict(Xtst)
+                errTstSK = compute_error(ytst, yPredSK)
+                print('\nTest Scikit-Learn Error = {0:4.2f}%.'.format(errTstSK * 100))
+                confusionMatrix = confusion_matrix(ytst, yPredSK)
                 matrix = ConfusionMatrixDisplay(confusion_matrix=confusionMatrix, display_labels=['0', '1'])
                 matrix.plot()
-                matrix.ax_.set_title("Bagging - Depth " + str(i) + " and Bag Size " + str(j) + " - SciKit-Learn Train Bootstrap Confusion Matrix")
+                matrix.ax_.set_title("Bagging - Depth " + str(i) + " and Bag Size " + str(j) + " - SciKit-Learn Test Confusion Matrix")
                 plt.show()
 
                 #Scikit-Learn test bootstrap set
-                clf = BaggingClassifier()
-                clf = clf.fit(Xtst, ytst)
-                yPredSK = clf.predict(xtstBootStrap)
-                errTstSK = compute_error(ytstBootStrap, yPredSK)
-                print('\nTest Scikit-Learn Error = {0:4.2f}%.'.format(errTstSK * 100))
-                confusionMatrix = confusion_matrix(ytstBootStrap, yPredSK)
-                matrix = ConfusionMatrixDisplay(confusion_matrix=confusionMatrix, display_labels=['0', '1'])
-                matrix.plot()
-                matrix.ax_.set_title("Bagging - Depth " + str(i) + " and Bag Size " + str(j) + " - SciKit-Learn Test Bootstrap Set Confusion Matrix")
-                plt.show()
+               # clf = BaggingClassifier()
+              #  clf = clf.fit(Xtst, ytst)
+               # yPredSK = clf.predict(xtstBootStrap)
+               # errTstSK = compute_error(ytstBootStrap, yPredSK)
+               # print('\nTest Scikit-Learn Error = {0:4.2f}%.'.format(errTstSK * 100))
+               # confusionMatrix = confusion_matrix(ytstBootStrap, yPredSK)
+               # matrix = ConfusionMatrixDisplay(confusion_matrix=confusionMatrix, display_labels=['0', '1'])
+                #matrix.plot()
+                #matrix.ax_.set_title("Bagging - Depth " + str(i) + " and Bag Size " + str(j) + " - SciKit-Learn Test Bootstrap Set Confusion Matrix")
+               # plt.show()
     
         print("-----------------------------------------------------------------------------------------------")
         print("BOOSTING")
