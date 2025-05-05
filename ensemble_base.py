@@ -704,13 +704,13 @@ if __name__ == '__main__':
                 
                 #Test bootstrap set
                 print("\nTest Set:")
-                bootStrapTst = bootstrap_sampler(Xtst, ytst, k*20)
-                xtstBootStrap, ytstBootStrap = bootStrapTst
-                boosted = boosting(xtstBootStrap, ytstBootStrap, d, k * 20)
-                y_predTst = predict_example_ens(xtstBootStrap, boosted)
-                errorTst = compute_error(ytstBootStrap, y_predTst)
+                #bootStrapTst = bootstrap_sampler(Xtst, ytst, k*20)
+                #xtstBootStrap, ytstBootStrap = bootStrapTst
+                #boosted = boosting(xtstBootStrap, ytstBootStrap, d, k * 20)
+                y_predTst = predict_example_ens(Xtst, boosted) #y_predTst = predict_example_ens(xtstBootStrap, boosted)
+                errorTst = compute_error(ytst, y_predTst)#errorTst = compute_error(ytstBootStrap, y_predTst)
                 print('Test Error = {0:4.2f}%.'.format(errorTst * 100))
-                cMatrix = confMatrix(y_predTst, ytstBootStrap)
+                cMatrix = confMatrix(y_predTst, ytst) #cMatrix = confMatrix(y_predTst, ytstBootStrap)
 
                 #Adaboost training bootstrap set
                 print("\n\nAdaboost:")
@@ -728,10 +728,10 @@ if __name__ == '__main__':
                 #Adaboost test bootstrap set
                 clf = AdaBoostClassifier()
                 clf = clf.fit(Xtst, ytst)
-                yPredAda = clf.predict(xtstBootStrap)
-                errorTst = compute_error(ytstBootStrap, yPredAda)
+                yPredAda = clf.predict(Xtst)#yPredAda = clf.predict(xtstBootStrap)
+                #errorTst = compute_error(ytst, yPredAda)#errorTst = compute_error(ytstBootStrap, yPredAda)
                 print('\nTest Adaboost Error = {0:4.2f}%.'.format(errorTst * 100))
-                confusionMatrix = confusion_matrix(ytstBootStrap, yPredAda)
+                confusionMatrix = confusion_matrix(ytst, yPredAda)#confusionMatrix = confusion_matrix(ytstBootStrap, yPredAda)
                 matrix = ConfusionMatrixDisplay(confusion_matrix=confusionMatrix, display_labels=['0', '1'])
                 matrix.plot()
                 matrix.ax_.set_title("Adaboost - Depth " + str(d) + " and Bag Size " + str(k*20) + " - Test Bootstrap Set Confusion Matrix")
